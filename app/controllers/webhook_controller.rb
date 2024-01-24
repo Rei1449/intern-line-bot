@@ -1,4 +1,6 @@
 require 'line/bot'
+# 感情分析用APIを使用するためのもの
+require 'nlpcloud'
 
 class WebhookController < ApplicationController
   protect_from_forgery except: [:callback] # CSRF対策無効化
@@ -24,9 +26,26 @@ class WebhookController < ApplicationController
       when Line::Bot::Event::Message
         case event.type
         when Line::Bot::Event::MessageType::Text
+          # 送られてきたLineのメッセージ
+          lineMessage = event.message['text']
+
+          clientNLP = NLPCloud::Client.new('distilbert-base-uncased-finetuned-sst-2-english','9f5a8910ec519948f6f0876c0cc1f1e7aed7b5fc', gpu: false, lang: 'jpn_Jpan')
+          response_sentiment = clientNLP.sentiment(lineMessage)
+
+          # レスポンスが返ってきているのかの確認用
+          # puts response_sentiment
+
+          # ネガティブかポジティブかの判定と、その際の感情のスコアを変数に格納
+          label = response_sentiment['scored_labels'][0]['label']
+          score = response_sentiment['scored_labels'][0]['score']
+          # 確認用
+          # puts label
+          # puts score
+
+          # 今回はスコアのみをユーザーに送り返す
           message = {
             type: 'text',
-            text: event.message['text']
+            text: score
           }
           client.reply_message(event['replyToken'], message)
         when Line::Bot::Event::MessageType::Image, Line::Bot::Event::MessageType::Video
