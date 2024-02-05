@@ -30,7 +30,7 @@ class WebhookController < ApplicationController
           line_message = event.message['text']
 
           client_nlp = NLPCloud::Client.new('distilbert-base-uncased-finetuned-sst-2-english',ENV['NLP_CLOUD_API_KEY'], gpu: false, lang: 'jpn_Jpan')
-          
+
           # エラーハンドリングを追加
           begin
             response_sentiment = client_nlp.sentiment(line_message)
@@ -39,16 +39,30 @@ class WebhookController < ApplicationController
             label = response_sentiment['scored_labels'][0]['label']
             score = response_sentiment['scored_labels'][0]['score']
 
-          rescue
-            score = "エラーが発生しました。少し時間を置いてから再度お試しください。"
+            # 今回はスコアのみをユーザーに送り返す
+            message = {
+              type: 'text',
+              text: score
+            }
+
+          # 429エラー用の処理
+          rescue RestClient::TooManyRequests => e
+            error_message = "API上限に達しました。1時間後に再度お試しください。"
+            message = {
+              type: 'text',
+              text: error_message
+            }
+          
+          # その他のエラー処理用
+          rescue => e
+            error_message = "エラーが発生しました。少し時間を置いてから再度お試しください。"
+            message = {
+              type: 'text',
+              text: error_message
+            }
           
           end
 
-          # 今回はスコアのみをユーザーに送り返す
-          message = {
-            type: 'text',
-            text: score
-          }
           client.reply_message(event['replyToken'], message)
         when Line::Bot::Event::MessageType::Image, Line::Bot::Event::MessageType::Video
           response = client.get_message_content(event.message['id'])
