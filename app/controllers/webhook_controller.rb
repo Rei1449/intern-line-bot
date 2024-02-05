@@ -7,8 +7,8 @@ class WebhookController < ApplicationController
 
   def client
     @client ||= Line::Bot::Client.new { |config|
-      config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
-      config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
+      config.channel_secret = ENV['LINE_CHANNEL_SECRET']
+      config.channel_token = ENV['LINE_CHANNEL_TOKEN']
     }
   end
 
@@ -27,20 +27,22 @@ class WebhookController < ApplicationController
         case event.type
         when Line::Bot::Event::MessageType::Text
           # 送られてきたLineのメッセージ
-          lineMessage = event.message['text']
+          line_message = event.message['text']
 
-          clientNLP = NLPCloud::Client.new('distilbert-base-uncased-finetuned-sst-2-english','9f5a8910ec519948f6f0876c0cc1f1e7aed7b5fc', gpu: false, lang: 'jpn_Jpan')
-          response_sentiment = clientNLP.sentiment(lineMessage)
+          client_nlp = NLPCloud::Client.new('distilbert-base-uncased-finetuned-sst-2-english',ENV['NLP_CLOUD_API_KEY'], gpu: false, lang: 'jpn_Jpan')
+          
+          # エラーハンドリングを追加
+          begin
+            response_sentiment = client_nlp.sentiment(line_message)
 
-          # レスポンスが返ってきているのかの確認用
-          # puts response_sentiment
+            # ネガティブかポジティブかの判定と、その際の感情のスコアを変数に格納
+            label = response_sentiment['scored_labels'][0]['label']
+            score = response_sentiment['scored_labels'][0]['score']
 
-          # ネガティブかポジティブかの判定と、その際の感情のスコアを変数に格納
-          label = response_sentiment['scored_labels'][0]['label']
-          score = response_sentiment['scored_labels'][0]['score']
-          # 確認用
-          # puts label
-          # puts score
+          rescue
+            score = "エラーが発生しました。少し時間を置いてから再度お試しください。"
+          
+          end
 
           # 今回はスコアのみをユーザーに送り返す
           message = {
