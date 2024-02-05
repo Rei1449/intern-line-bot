@@ -15,6 +15,9 @@ class WebhookController < ApplicationController
   def callback
     body = request.body.read
 
+    audio_positive_list = ['https://www.youtube.com/watch?v=TW9d8vYrVFQ','https://www.youtube.com/watch?v=HZd-vLLeSt0']
+    audio_negative_list = ['https://www.youtube.com/watch?v=0kqyGvc_WNA','https://www.youtube.com/watch?v=faf98cNY8A8']
+
     signature = request.env['HTTP_X_LINE_SIGNATURE']
     unless client.validate_signature(body, signature)
       head 470
@@ -39,10 +42,18 @@ class WebhookController < ApplicationController
             label = response_sentiment['scored_labels'][0]['label']
             score = response_sentiment['scored_labels'][0]['score']
 
-            # 今回はスコアのみをユーザーに送り返す
+            # 今回は値に応じて特定の一曲を返すように実装
+            if label == 'POSITIVE'
+              audio_url = score > 0.5 ? audio_positive_list[0] : audio_positive_list[1]
+            
+            elsif label == 'NEGATIVE'
+              audio_url = score > 0.5 ? audio_negative_list[0] : audio_negative_list[1]
+            
+            end
+
             message = {
               type: 'text',
-              text: score
+              text: audio_url
             }
 
           # 429エラー用の処理
