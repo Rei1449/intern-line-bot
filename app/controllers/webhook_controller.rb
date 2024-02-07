@@ -5,6 +5,10 @@ require 'nlpcloud'
 class WebhookController < ApplicationController
   protect_from_forgery except: [:callback] # CSRF対策無効化
 
+  # 音楽リストを定数化
+  AUDIO_POSITIVE_LIST = ['https://www.youtube.com/watch?v=TW9d8vYrVFQ','https://www.youtube.com/watch?v=HZd-vLLeSt0']
+  AUDIO_NEGATIVE_LIST = ['https://www.youtube.com/watch?v=0kqyGvc_WNA','https://www.youtube.com/watch?v=faf98cNY8A8']
+
   def client
     @client ||= Line::Bot::Client.new { |config|
       config.channel_secret = ENV['LINE_CHANNEL_SECRET']
@@ -12,11 +16,24 @@ class WebhookController < ApplicationController
     }
   end
 
+  def response_audio_url(label, score)
+    if label == 'POSITIVE'
+      audio_url = score > 0.5 ? AUDIO_POSITIVE_LIST[0] : AUDIO_POSITIVE_LIST[1]
+
+    elsif label == 'NEGATIVE'
+      audio_url = score > 0.5 ? AUDIO_NEGATIVE_LIST[0] : AUDIO_NEGATIVE_LIST[1]
+    
+    # ラベルが想定していた文字列でない場合はエラーとして処理。
+    else
+      audio_url = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
+
+    end
+
+    return audio_url
+  end
+
   def callback
     body = request.body.read
-
-    audio_positive_list = ['https://www.youtube.com/watch?v=TW9d8vYrVFQ','https://www.youtube.com/watch?v=HZd-vLLeSt0']
-    audio_negative_list = ['https://www.youtube.com/watch?v=0kqyGvc_WNA','https://www.youtube.com/watch?v=faf98cNY8A8']
 
     signature = request.env['HTTP_X_LINE_SIGNATURE']
     unless client.validate_signature(body, signature)
@@ -42,14 +59,7 @@ class WebhookController < ApplicationController
             label = response_sentiment['scored_labels'][0]['label']
             score = response_sentiment['scored_labels'][0]['score']
 
-            # 今回は値に応じて特定の一曲を返すように実装
-            if label == 'POSITIVE'
-              audio_url = score > 0.5 ? audio_positive_list[0] : audio_positive_list[1]
-            
-            elsif label == 'NEGATIVE'
-              audio_url = score > 0.5 ? audio_negative_list[0] : audio_negative_list[1]
-            
-            end
+            audio_url = response_audio_url(label, score)
 
             message = {
               type: 'text',
@@ -58,7 +68,7 @@ class WebhookController < ApplicationController
 
           # 429エラー用の処理
           rescue RestClient::TooManyRequests => e
-            error_message = "API上限に達しました。1時間後に再度お試しください。"
+            error_message = 'API上限に達しました。1時間後に再度お試しください。'
             message = {
               type: 'text',
               text: error_message
@@ -66,7 +76,7 @@ class WebhookController < ApplicationController
           
           # その他のエラー処理用
           rescue => e
-            error_message = "エラーが発生しました。少し時間を置いてから再度お試しください。"
+            error_message = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
             message = {
               type: 'text',
               text: error_message
