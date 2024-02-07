@@ -17,19 +17,25 @@ class WebhookController < ApplicationController
   end
 
   def response_audio_url(label, score)
-    if label == 'POSITIVE'
-      audio_url = score > 0.5 ? AUDIO_POSITIVE_LIST[0] : AUDIO_POSITIVE_LIST[1]
+    begin
+      if label == 'POSITIVE'
+        audio_url = score > 0.5 ? AUDIO_POSITIVE_LIST[0] : AUDIO_POSITIVE_LIST[1]
+      elsif label == 'NEGATIVE'
+        audio_url = score > 0.5 ? AUDIO_NEGATIVE_LIST[0] : AUDIO_NEGATIVE_LIST[1]
+      end
 
-    elsif label == 'NEGATIVE'
-      audio_url = score > 0.5 ? AUDIO_NEGATIVE_LIST[0] : AUDIO_NEGATIVE_LIST[1]
+      # labelが想定していたもの異なる場合、例外処理
+      if audio_url.blank?
+        raise UnexpectedApiResponseError
+      end
+
+      return audio_url
     
-    # ラベルが想定していた文字列でない場合はエラーとして処理。
-    else
-      audio_url = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
-
+    rescue UnexpectedApiResponseError => e
+      error_message = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
+      return error_message
+    
     end
-
-    return audio_url
   end
 
   def callback
@@ -59,11 +65,11 @@ class WebhookController < ApplicationController
             label = response_sentiment['scored_labels'][0]['label']
             score = response_sentiment['scored_labels'][0]['score']
 
-            audio_url = response_audio_url(label, score)
+            response = response_audio_url(label, score)
 
             message = {
               type: 'text',
-              text: audio_url
+              text: response
             }
 
           # 429エラー用の処理
@@ -76,6 +82,7 @@ class WebhookController < ApplicationController
           
           # その他のエラー処理用
           rescue => e
+            puts e
             error_message = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
             message = {
               type: 'text',
