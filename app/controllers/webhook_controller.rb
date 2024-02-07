@@ -5,11 +5,37 @@ require 'nlpcloud'
 class WebhookController < ApplicationController
   protect_from_forgery except: [:callback] # CSRF対策無効化
 
+  # 音楽リストを定数化
+  AUDIO_POSITIVE_LIST = ['https://www.youtube.com/watch?v=TW9d8vYrVFQ','https://www.youtube.com/watch?v=HZd-vLLeSt0']
+  AUDIO_NEGATIVE_LIST = ['https://www.youtube.com/watch?v=0kqyGvc_WNA','https://www.youtube.com/watch?v=faf98cNY8A8']
+
   def client
     @client ||= Line::Bot::Client.new { |config|
       config.channel_secret = ENV['LINE_CHANNEL_SECRET']
       config.channel_token = ENV['LINE_CHANNEL_TOKEN']
     }
+  end
+
+  def response_audio_url(label, score)
+    begin
+      if label == 'POSITIVE'
+        audio_url = score > 0.5 ? AUDIO_POSITIVE_LIST[0] : AUDIO_POSITIVE_LIST[1]
+      elsif label == 'NEGATIVE'
+        audio_url = score > 0.5 ? AUDIO_NEGATIVE_LIST[0] : AUDIO_NEGATIVE_LIST[1]
+      end
+
+      # labelが想定していたもの異なる場合、例外処理
+      if audio_url.blank?
+        raise UnexpectedApiResponseError
+      end
+
+      return audio_url
+    
+    rescue UnexpectedApiResponseError => e
+      error_message = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
+      return error_message
+    
+    end
   end
 
   def callback
@@ -39,15 +65,16 @@ class WebhookController < ApplicationController
             label = response_sentiment['scored_labels'][0]['label']
             score = response_sentiment['scored_labels'][0]['score']
 
-            # 今回はスコアのみをユーザーに送り返す
+            response = response_audio_url(label, score)
+
             message = {
               type: 'text',
-              text: score
+              text: response
             }
 
           # 429エラー用の処理
           rescue RestClient::TooManyRequests => e
-            error_message = "API上限に達しました。1時間後に再度お試しください。"
+            error_message = 'API上限に達しました。1時間後に再度お試しください。'
             message = {
               type: 'text',
               text: error_message
@@ -55,7 +82,8 @@ class WebhookController < ApplicationController
           
           # その他のエラー処理用
           rescue => e
-            error_message = "エラーが発生しました。少し時間を置いてから再度お試しください。"
+            puts e
+            error_message = 'エラーが発生しました。少し時間を置いてから再度お試しください。'
             message = {
               type: 'text',
               text: error_message

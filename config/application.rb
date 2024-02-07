@@ -16,5 +16,8 @@ module RubyGettingStarted
     # -- all .rb files in that directory are automatically loaded after loading
     # the framework and any gems in your application.
 
+    # 作成したカスタム例外を使えるように追加
+    config.autoload_paths += Dir.glob("#{config.root}/app/errors")
+
   end
 end
